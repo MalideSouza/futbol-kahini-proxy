@@ -8,48 +8,44 @@ app.use(cors()); // CORS'u etkinleştiriyoruz
 
 // Ana API rotamız
 app.get("/getFixtures", async (req, res) => {
-  // API Anahtarını güvenli .env dosyasından alıyoruz
-  const apiKey = process.env.API_KEY;
+  // API Anahtarını güvenli ortam değişkenlerinden alıyoruz
+  const apiKey = process.env.FOOTBALL_DATA_API_KEY;
 
   if (!apiKey) {
     return res.status(500).json({ error: "API anahtarı sunucuda tanımlanmamış." });
   }
 
-  const leagueId = '203'; // Süper Lig ID
-  const season = new Date().getFullYear();
-  const apiUrl = `https://v3.football.api-sports.io/fixtures?league=${leagueId}&season=${season}`;
+  const leagueCode = 'CL'; // Şampiyonlar Ligi
+  const apiUrl = `https://api.football-data.org/v4/competitions/${leagueCode}/matches?status=SCHEDULED`;
 
   try {
     const apiResponse = await fetch(apiUrl, {
       method: 'GET',
       headers: {
-        'x-rapidapi-key': apiKey,
-        'x-rapidapi-host': 'v3.football.api-sports.io'
+        'X-Auth-Token': apiKey,
       }
     });
 
     const responseData = await apiResponse.json();
 
-    // Hata kontrolü
-    if (responseData.errors && (Object.keys(responseData.errors).length > 0 || responseData.errors.token) ) {
-        console.error("API'den hata alındı:", responseData.errors);
-        return res.status(500).json({ error: "API'den veri çekilirken bir sorun oluştu. API anahtarınızı veya aboneliğinizi kontrol edin." });
+    if (!apiResponse.ok) {
+        console.error("API'den hata alındı:", responseData);
+        return res.status(apiResponse.status).json({ error: responseData.message || "API'den veri çekilirken bir sorun oluştu." });
     }
 
     // Veriyi web sitemizin anlayacağı formata dönüştürüyoruz
-    const fixtures = responseData.response.map(fixture => ({
-      id: fixture.fixture.id,
-      rawDate: fixture.fixture.date,
-      group: `Süper Lig - ${fixture.league.round.replace('Regular Season - ', '')}. Hafta`,
-      date: new Date(fixture.fixture.date).toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }),
-      homeTeam: {
-        name: fixture.teams.home.name,
-        logoUrl: fixture.teams.home.logo
-      },
-      awayTeam: {
-        name: fixture.teams.away.name,
-        logoUrl: fixture.teams.away.logo
-      }
+    const fixtures = responseData.matches.map(match => ({
+        id: match.id,
+        group: `${(match.group || 'Eleme Turu').replace('GROUP_', 'Grup ')} - ${match.matchday}. Hafta`,
+        date: new Date(match.utcDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', 'year': 'numeric' }),
+        homeTeam: {
+            name: match.homeTeam.name,
+            logoUrl: match.homeTeam.crest
+        },
+        awayTeam: {
+            name: match.awayTeam.name,
+            logoUrl: match.awayTeam.crest
+        }
     }));
     
     res.json(fixtures); // Veriyi web sitemize gönderiyoruz
@@ -61,7 +57,10 @@ app.get("/getFixtures", async (req, res) => {
 });
 
 // Sunucuyu dinlemeye başlıyoruz
-const listener = app.listen(process.env.PORT || 3000, () => {
+const port = process.env.PORT || 3000;
+const listener = app.listen(port, () => {
   console.log("Futbol Kahini aracı sunucusu " + listener.address().port + " portunda çalışıyor.");
 });
+
+
 
