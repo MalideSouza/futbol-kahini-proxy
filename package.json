@@ -1,0 +1,14 @@
+{
+  "name": "futbol-kahini-proxy",
+  "version": "1.0.0",
+  "description": "Futbol Kahini için API proxy sunucusu",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "cors": "*",
+    "node-fetch": "2.0.0"
+  }
+}
