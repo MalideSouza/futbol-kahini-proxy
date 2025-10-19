@@ -1,66 +1,78 @@
-// Gerekli kütüphaneleri dahil ediyoruz
 const express = require("express");
 const fetch = require("node-fetch");
-const cors = require("cors"); // Farklı domain'den istek gelmesine izin vermek için
+const cors = require("cors");
 
 const app = express();
-app.use(cors()); // CORS'u etkinleştiriyoruz
+app.use(cors());
 
-// Ana API rotamız
+const API_KEY = process.env.FOOTBALL_DATA_API_KEY;
+const BASE_URL = 'https://api.football-data.org/v4';
+const LEAGUE_CODE = 'CL'; // Şampiyonlar Ligi
+
+const fetchData = async (endpoint) => {
+  if (!API_KEY) {
+    throw new Error("API anahtarı sunucuda tanımlanmamış.");
+  }
+  
+  const response = await fetch(`${BASE_URL}${endpoint}`, {
+    headers: { 'X-Auth-Token': API_KEY }
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    console.error(`API'den hata alındı (${endpoint}):`, errorData);
+    throw new Error(errorData.message || `API endpoint'i (${endpoint}) çalışmadı.`);
+  }
+
+  return response.json();
+};
+
+// Planlanmış maçları çeken endpoint
 app.get("/getFixtures", async (req, res) => {
-  // API Anahtarını güvenli ortam değişkenlerinden alıyoruz
-  const apiKey = process.env.FOOTBALL_DATA_API_KEY;
-
-  if (!apiKey) {
-    return res.status(500).json({ error: "API anahtarı sunucuda tanımlanmamış." });
-  }
-
-  const leagueCode = 'CL'; // Şampiyonlar Ligi
-  const apiUrl = `https://api.football-data.org/v4/competitions/${leagueCode}/matches?status=SCHEDULED`;
-
   try {
-    const apiResponse = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'X-Auth-Token': apiKey,
-      }
-    });
-
-    const responseData = await apiResponse.json();
-
-    if (!apiResponse.ok) {
-        console.error("API'den hata alındı:", responseData);
-        return res.status(apiResponse.status).json({ error: responseData.message || "API'den veri çekilirken bir sorun oluştu." });
-    }
-
-    // Veriyi web sitemizin anlayacağı formata dönüştürüyoruz
-    const fixtures = responseData.matches.map(match => ({
+    const data = await fetchData(`/competitions/${LEAGUE_CODE}/matches?status=SCHEDULED`);
+    const fixtures = data.matches.map(match => ({
         id: match.id,
-        group: `${(match.group || 'Eleme Turu').replace('GROUP_', 'Grup ')} - ${match.matchday}. Hafta`,
-        date: new Date(match.utcDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', 'year': 'numeric' }),
-        homeTeam: {
-            name: match.homeTeam.name,
-            logoUrl: match.homeTeam.crest
-        },
-        awayTeam: {
-            name: match.awayTeam.name,
-            logoUrl: match.awayTeam.crest
-        }
+        rawDate: match.utcDate,
+        matchday: match.matchday,
+        group: `${(match.group || 'Eleme Turu').replace('GROUP_', 'Grup ')}`,
+        date: new Date(match.utcDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }),
+        homeTeam: { name: match.homeTeam.name, logoUrl: match.homeTeam.crest },
+        awayTeam: { name: match.awayTeam.name, logoUrl: match.awayTeam.crest }
     }));
-    
-    res.json(fixtures); // Veriyi web sitemize gönderiyoruz
-
+    res.json(fixtures);
   } catch (error) {
-    console.error("Sunucuda bir hata oluştu:", error);
-    res.status(500).json({ error: "Fikstürler çekilirken beklenmedik bir hata oluştu." });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Sunucuyu dinlemeye başlıyoruz
-const port = process.env.PORT || 3000;
-const listener = app.listen(port, () => {
-  console.log("Futbol Kahini aracı sunucusu " + listener.address().port + " portunda çalışıyor.");
+// Biten maçları çeken endpoint
+app.get("/getFinishedMatches", async (req, res) => {
+  try {
+    const data = await fetchData(`/competitions/${LEAGUE_CODE}/matches?status=FINISHED`);
+    // Sadece son 5 biten maçı gönderiyoruz
+    res.json(data.matches.slice(-5)); 
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
+
+// Gol krallığını çeken endpoint
+app.get("/getScorers", async (req, res) => {
+  try {
+    const data = await fetchData(`/competitions/${LEAGUE_CODE}/scorers`);
+     // Sadece ilk 10 golcüyü gönderiyoruz
+    res.json(data.scorers.slice(0, 10));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Futbol Kahini aracı sunucusu ${port} portunda çalışıyor.`);
+});
+
 
 
 
