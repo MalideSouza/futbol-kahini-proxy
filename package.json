@@ -9,7 +9,8 @@
   "dependencies": {
     "express": "^4.17.1",
     "cors": "*",
-    "node-fetch": "2.0.0"
+    "node-fetch": "2.0.0",
+    "firebase-admin": "^11.0.0"
   }
 }
 
